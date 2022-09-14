@@ -15,6 +15,7 @@
 package mqtt
 
 import (
+	"fmt"
 	"github.com/eclipse/paho.mqtt.golang/packets"
 )
 
@@ -95,6 +96,7 @@ func newConnectMsgFromOptions(options *ClientOptions) *packets.ConnectPacket {
 	}
 
 	if username != "" {
+		fmt.Printf("USERNAME: %q\n", username)
 		m.UsernameFlag = true
 		m.Username = username
 		//mustn't have password without user as well
