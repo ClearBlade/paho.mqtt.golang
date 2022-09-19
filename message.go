@@ -104,6 +104,8 @@ func newConnectMsgFromOptions(options *ClientOptions) *packets.ConnectPacket {
 			m.PasswordFlag = true
 			m.Password = []byte(password)
 		}
+	} else {
+		fmt.Printf("NO USERNAME\n")
 	}
 
 	m.Keepalive = uint16(options.KeepAlive)
