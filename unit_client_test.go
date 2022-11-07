@@ -1,10 +1,14 @@
 /*
- * Copyright (c) 2013 IBM Corp.
+ * Copyright (c) 2021 IBM Corp and others.
  *
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * are made available under the terms of the Eclipse Public License v2.0
+ * and Eclipse Distribution License v1.0 which accompany this distribution.
+ *
+ * The Eclipse Public License is available at
+ *    https://www.eclipse.org/legal/epl-2.0/
+ * and the Eclipse Distribution License is available at
+ *   http://www.eclipse.org/org/documents/edl-v10.php.
  *
  * Contributors:
  *    Seth Hoenig
@@ -17,17 +21,16 @@ package mqtt
 import (
 	"log"
 	"net/http"
-	"os"
-	"testing"
-
 	_ "net/http/pprof"
+	"testing"
 )
 
 func init() {
-	DEBUG = log.New(os.Stderr, "DEBUG    ", log.Ltime)
-	WARN = log.New(os.Stderr, "WARNING  ", log.Ltime)
-	CRITICAL = log.New(os.Stderr, "CRITICAL ", log.Ltime)
-	ERROR = log.New(os.Stderr, "ERROR    ", log.Ltime)
+	// Logging is off by default as this makes things simpler when you just want to confirm that tests pass
+	// DEBUG = log.New(os.Stderr, "DEBUG    ", log.Ltime)
+	// WARN = log.New(os.Stderr, "WARNING  ", log.Ltime)
+	// CRITICAL = log.New(os.Stderr, "CRITICAL ", log.Ltime)
+	// ERROR = log.New(os.Stderr, "ERROR    ", log.Ltime)
 
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
@@ -76,4 +79,32 @@ func Test_NewClient_optionsReader(t *testing.T) {
 		t.Fatalf("unable to read hostname")
 	}
 
+}
+
+func Test_isConnection(t *testing.T) {
+	ops := NewClientOptions()
+	c := NewClient(ops)
+
+	c.(*client).status.forceConnectionStatus(connected)
+	if !c.IsConnectionOpen() {
+		t.Fail()
+	}
+}
+
+func Test_isConnectionOpenNegative(t *testing.T) {
+	ops := NewClientOptions()
+	c := NewClient(ops)
+
+	c.(*client).status.forceConnectionStatus(reconnecting)
+	if c.IsConnectionOpen() {
+		t.Fail()
+	}
+	c.(*client).status.forceConnectionStatus(connecting)
+	if c.IsConnectionOpen() {
+		t.Fail()
+	}
+	c.(*client).status.forceConnectionStatus(disconnected)
+	if c.IsConnectionOpen() {
+		t.Fail()
+	}
 }

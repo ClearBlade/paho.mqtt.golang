@@ -1,10 +1,14 @@
 /*
- * Copyright (c) 2013 IBM Corp.
+ * Copyright (c) 2021 IBM Corp and others.
  *
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * are made available under the terms of the Eclipse Public License v2.0
+ * and Eclipse Distribution License v1.0 which accompany this distribution.
+ *
+ * The Eclipse Public License is available at
+ *    https://www.eclipse.org/legal/epl-2.0/
+ * and the Eclipse Distribution License is available at
+ *   http://www.eclipse.org/org/documents/edl-v10.php.
  *
  * Contributors:
  *    Seth Hoenig
@@ -15,7 +19,9 @@
 package mqtt
 
 import (
-	"fmt"
+	"net/url"
+	"sync"
+
 	"github.com/eclipse/paho.mqtt.golang/packets"
 )
 
@@ -29,6 +35,7 @@ type Message interface {
 	Topic() string
 	MessageID() uint16
 	Payload() []byte
+	Ack()
 }
 
 type message struct {
@@ -38,6 +45,8 @@ type message struct {
 	topic     string
 	messageID uint16
 	payload   []byte
+	once      sync.Once
+	ack       func()
 }
 
 func (m *message) Duplicate() bool {
@@ -64,7 +73,11 @@ func (m *message) Payload() []byte {
 	return m.payload
 }
 
-func messageFromPublish(p *packets.PublishPacket) Message {
+func (m *message) Ack() {
+	m.once.Do(m.ack)
+}
+
+func messageFromPublish(p *packets.PublishPacket, ack func()) Message {
 	return &message{
 		duplicate: p.Dup,
 		qos:       p.Qos,
@@ -72,10 +85,11 @@ func messageFromPublish(p *packets.PublishPacket) Message {
 		topic:     p.TopicName,
 		messageID: p.MessageID,
 		payload:   p.Payload,
+		ack:       ack,
 	}
 }
 
-func newConnectMsgFromOptions(options *ClientOptions) *packets.ConnectPacket {
+func newConnectMsgFromOptions(options *ClientOptions, broker *url.URL) *packets.ConnectPacket {
 	m := packets.NewControlPacket(packets.Connect).(*packets.ConnectPacket)
 
 	m.CleanSession = options.CleanSession
@@ -91,21 +105,23 @@ func newConnectMsgFromOptions(options *ClientOptions) *packets.ConnectPacket {
 
 	username := options.Username
 	password := options.Password
+	if broker.User != nil {
+		username = broker.User.Username()
+		if pwd, ok := broker.User.Password(); ok {
+			password = pwd
+		}
+	}
 	if options.CredentialsProvider != nil {
 		username, password = options.CredentialsProvider()
 	}
 
 	if username != "" {
-		fmt.Printf("USERNAME: %q\n", username)
 		m.UsernameFlag = true
 		m.Username = username
-		//mustn't have password without user as well
-		if password != "" {
-			m.PasswordFlag = true
-			m.Password = []byte(password)
-		}
-	} else {
-		fmt.Printf("NO USERNAME\n")
+	}
+	if password != "" {
+		m.PasswordFlag = true
+		m.Password = []byte(password)
 	}
 
 	m.Keepalive = uint16(options.KeepAlive)

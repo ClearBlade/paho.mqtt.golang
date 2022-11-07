@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2021 IBM Corp and others.
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * and Eclipse Distribution License v1.0 which accompany this distribution.
+ *
+ * The Eclipse Public License is available at
+ *    https://www.eclipse.org/legal/epl-2.0/
+ * and the Eclipse Distribution License is available at
+ *   http://www.eclipse.org/org/documents/edl-v10.php.
+ *
+ * Contributors:
+ *    Allan Stockdill-Mander
+ */
+
 package packets
 
 import (
@@ -192,43 +208,43 @@ func TestPackUnpackControlPackets(t *testing.T) {
 }
 
 func TestEncoding(t *testing.T) {
-	if res := decodeByte(bytes.NewBuffer([]byte{0x56})); res != 0x56 {
-		t.Errorf("decodeByte([0x56]) did not return 0x56 but 0x%X", res)
+	if res, err := decodeByte(bytes.NewBuffer([]byte{0x56})); res != 0x56 || err != nil {
+		t.Errorf("decodeByte([0x56]) did not return (0x56, nil) but (0x%X, %v)", res, err)
 	}
-	if res := decodeUint16(bytes.NewBuffer([]byte{0x56, 0x78})); res != 22136 {
-		t.Errorf("decodeUint16([0x5678]) did not return 22136 but %d", res)
+	if res, err := decodeUint16(bytes.NewBuffer([]byte{0x56, 0x78})); res != 22136 || err != nil {
+		t.Errorf("decodeUint16([0x5678]) did not return (22136, nil) but (%d, %v)", res, err)
 	}
 	if res := encodeUint16(22136); !bytes.Equal(res, []byte{0x56, 0x78}) {
 		t.Errorf("encodeUint16(22136) did not return [0x5678] but [0x%X]", res)
 	}
 
 	strings := map[string][]byte{
-		"foo":         []byte{0x00, 0x03, 'f', 'o', 'o'},
-		"\U0000FEFF":  []byte{0x00, 0x03, 0xEF, 0xBB, 0xBF},
-		"A\U0002A6D4": []byte{0x00, 0x05, 'A', 0xF0, 0xAA, 0x9B, 0x94},
+		"foo":         {0x00, 0x03, 'f', 'o', 'o'},
+		"\U0000FEFF":  {0x00, 0x03, 0xEF, 0xBB, 0xBF},
+		"A\U0002A6D4": {0x00, 0x05, 'A', 0xF0, 0xAA, 0x9B, 0x94},
 	}
 	for str, encoded := range strings {
-		if res := decodeString(bytes.NewBuffer(encoded)); res != str {
-			t.Errorf(`decodeString(%v) did not return "%s", but "%s"`, encoded, str, res)
+		if res, err := decodeString(bytes.NewBuffer(encoded)); res != str || err != nil {
+			t.Errorf("decodeString(%v) did not return (%q, nil), but (%q, %v)", encoded, str, res, err)
 		}
 		if res := encodeString(str); !bytes.Equal(res, encoded) {
-			t.Errorf(`encodeString("%s") did not return [0x%X], but [0x%X]`, str, encoded, res)
+			t.Errorf("encodeString(%q) did not return [0x%X], but [0x%X]", str, encoded, res)
 		}
 	}
 
 	lengths := map[int][]byte{
-		0:         []byte{0x00},
-		127:       []byte{0x7F},
-		128:       []byte{0x80, 0x01},
-		16383:     []byte{0xFF, 0x7F},
-		16384:     []byte{0x80, 0x80, 0x01},
-		2097151:   []byte{0xFF, 0xFF, 0x7F},
-		2097152:   []byte{0x80, 0x80, 0x80, 0x01},
-		268435455: []byte{0xFF, 0xFF, 0xFF, 0x7F},
+		0:         {0x00},
+		127:       {0x7F},
+		128:       {0x80, 0x01},
+		16383:     {0xFF, 0x7F},
+		16384:     {0x80, 0x80, 0x01},
+		2097151:   {0xFF, 0xFF, 0x7F},
+		2097152:   {0x80, 0x80, 0x80, 0x01},
+		268435455: {0xFF, 0xFF, 0xFF, 0x7F},
 	}
 	for length, encoded := range lengths {
-		if res := decodeLength(bytes.NewBuffer(encoded)); res != length {
-			t.Errorf("decodeLength([0x%X]) did not return %d, but %d", encoded, length, res)
+		if res, err := decodeLength(bytes.NewBuffer(encoded)); res != length || err != nil {
+			t.Errorf("decodeLength([0x%X]) did not return (%d, nil) but (%d, %v)", encoded, length, res, err)
 		}
 		if res := encodeLength(length); !bytes.Equal(res, encoded) {
 			t.Errorf("encodeLength(%d) did not return [0x%X], but [0x%X]", length, encoded, res)

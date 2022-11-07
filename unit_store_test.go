@@ -1,10 +1,14 @@
 /*
- * Copyright (c) 2013 IBM Corp.
+ * Copyright (c) 2021 IBM Corp and others.
  *
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * are made available under the terms of the Eclipse Public License v2.0
+ * and Eclipse Distribution License v1.0 which accompany this distribution.
+ *
+ * The Eclipse Public License is available at
+ *    https://www.eclipse.org/legal/epl-2.0/
+ * and the Eclipse Distribution License is available at
+ *   http://www.eclipse.org/org/documents/edl-v10.php.
  *
  * Contributors:
  *    Seth Hoenig
@@ -15,8 +19,6 @@
 package mqtt
 
 import (
-	"fmt"
-	"io/ioutil"
 	"testing"
 
 	"github.com/eclipse/paho.mqtt.golang/packets"
@@ -42,15 +44,6 @@ func Test_exists_no(t *testing.T) {
 	if b {
 		t.Errorf("you have some strange files")
 	}
-}
-
-func isemptydir(dir string) bool {
-	if !exists(dir) {
-		panic(fmt.Errorf("Directory %s does not exist", dir))
-	}
-	files, err := ioutil.ReadDir(dir)
-	chkerr(err)
-	return len(files) == 0
 }
 
 func Test_mIDFromKey(t *testing.T) {
@@ -91,7 +84,7 @@ func Test_persistOutbound_connect(t *testing.T) {
 	m.Username = "user"
 	m.Password = []byte("pass")
 	m.ClientIdentifier = "cid"
-	//m := newConnectMsg(false, false, QOS_ZERO, false, "", nil, "cid", "user", "pass", 10)
+	// m := newConnectMsg(false, false, QOS_ZERO, false, "", nil, "cid", "user", "pass", 10)
 	persistOutbound(ts, m)
 
 	if len(ts.mput) != 0 {

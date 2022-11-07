@@ -1,10 +1,14 @@
 /*
- * Copyright (c) 2013 IBM Corp.
+ * Copyright (c) 2021 IBM Corp and others.
  *
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * are made available under the terms of the Eclipse Public License v2.0
+ * and Eclipse Distribution License v1.0 which accompany this distribution.
+ *
+ * The Eclipse Public License is available at
+ *    https://www.eclipse.org/legal/epl-2.0/
+ * and the Eclipse Distribution License is available at
+ *   http://www.eclipse.org/org/documents/edl-v10.php.
  *
  * Contributors:
  *    Seth Hoenig
@@ -16,17 +20,15 @@ package mqtt
 
 import (
 	"testing"
+	"time"
 
 	"github.com/eclipse/paho.mqtt.golang/packets"
 )
 
 func Test_newRouter(t *testing.T) {
-	router, stop := newRouter()
+	router := newRouter()
 	if router == nil {
 		t.Fatalf("router is nil")
-	}
-	if stop == nil {
-		t.Fatalf("stop is nil")
 	}
 	if router.routes.Len() != 0 {
 		t.Fatalf("router.routes was not empty")
@@ -34,10 +36,8 @@ func Test_newRouter(t *testing.T) {
 }
 
 func Test_AddRoute(t *testing.T) {
-	router, _ := newRouter()
-	calledback := false
+	router := newRouter()
 	cb := func(client Client, msg Message) {
-		calledback = true
 	}
 	router.addRoute("/alpha", cb)
 
@@ -46,8 +46,35 @@ func Test_AddRoute(t *testing.T) {
 	}
 }
 
+func Test_AddRoute_Wildcards(t *testing.T) {
+	router := newRouter()
+	cb := func(client Client, msg Message) {
+	}
+	router.addRoute("#", cb)
+	router.addRoute("topic1", cb)
+
+	if router.routes.Len() != 2 {
+		t.Fatalf("addRoute should only override routes on exact topic match")
+	}
+}
+
+func Test_DeleteRoute_Wildcards(t *testing.T) {
+	router := newRouter()
+	cb := func(client Client, msg Message) {
+	}
+	router.addRoute("#", cb)
+	router.addRoute("topic1", cb)
+	router.deleteRoute("topic1")
+
+	expected := "#"
+	got := router.routes.Front().Value.(*route).topic
+	if !(router.routes.Front().Value.(*route).topic == "#") {
+		t.Fatalf("deleteRoute deleted wrong route when wildcards are used, got topic '%s', expected route with topic '%s'", got, expected)
+	}
+}
+
 func Test_Match(t *testing.T) {
-	router, _ := newRouter()
+	router := newRouter()
 	router.addRoute("/alpha", nil)
 
 	if !router.routes.Front().Value.(*route).match("/alpha") {
@@ -268,23 +295,26 @@ func Test_MatchAndDispatch(t *testing.T) {
 
 	msgs := make(chan *packets.PublishPacket)
 
-	router, stopper := newRouter()
+	router := newRouter()
 	router.addRoute("a", cb)
 
-	router.matchAndDispatch(msgs, true, nil)
-
+	stopped := make(chan bool)
+	go func() {
+		router.matchAndDispatch(msgs, true, &client{oboundP: make(chan *PacketAndToken, 100)})
+		stopped <- true
+	}()
 	msgs <- pub
 
 	<-calledback
 
-	stopper <- true
+	close(msgs)
 
 	select {
-	case msgs <- pub:
-		t.Errorf("msgs should not have a listener")
-	default:
+	case <-stopped:
+		break
+	case <-time.After(time.Second):
+		t.Errorf("matchAndDispatch should have exited")
 	}
-
 }
 
 func Test_SharedSubscription_MatchAndDispatch(t *testing.T) {
@@ -301,21 +331,26 @@ func Test_SharedSubscription_MatchAndDispatch(t *testing.T) {
 
 	msgs := make(chan *packets.PublishPacket)
 
-	router, stopper := newRouter()
+	router := newRouter()
 	router.addRoute("$share/az1/a", cb)
 
-	router.matchAndDispatch(msgs, true, nil)
+	stopped := make(chan bool)
+	go func() {
+		router.matchAndDispatch(msgs, true, &client{oboundP: make(chan *PacketAndToken, 100)})
+		stopped <- true
+	}()
 
 	msgs <- pub
 
 	<-calledback
 
-	stopper <- true
+	close(msgs)
 
 	select {
-	case msgs <- pub:
-		t.Errorf("msgs should not have a listener")
-	default:
+	case <-stopped:
+		break
+	case <-time.After(time.Second):
+		t.Errorf("matchAndDispatch should have exited")
 	}
 
 }
