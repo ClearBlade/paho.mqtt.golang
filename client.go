@@ -413,7 +413,7 @@ func (c *client) attemptConnection() (net.Conn, byte, bool, error) {
 			goto CONN
 		}
 		if c.options.protocolVersionExplicit { // to maintain logging from previous version
-			ERROR.Println(CLI, "Connecting to", broker, "CONNACK was not CONN_ACCEPTED, but rather", packets.ConnackReturnCodes[rc])
+			ERROR.Println(CLI, "Connecting to", broker, fmt.Sprintf("%s: CONNACK was not CONN_ACCEPTED, but rather %s", c.options.ClientID, packets.ConnackReturnCodes[rc]))
 		}
 	}
 	// If the connection was successful we set member variable and lock in the protocol version for future connection attempts (and users)
