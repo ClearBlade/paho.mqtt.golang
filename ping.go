@@ -70,7 +70,7 @@ func keepalive(c *client, conn io.Writer) {
 				}
 			}
 			if atomic.LoadInt32(&c.pingOutstanding) > 0 && time.Since(pingSent) >= c.options.PingTimeout {
-				CRITICAL.Println(PNG, fmt.Sprintf("pingresp no received for %+v, disconnecting", c.options))
+				CRITICAL.Println(PNG, fmt.Sprintf("%s: pingresp no received for %+v, disconnecting", c.options.ClientID, c.options))
 				c.internalConnLost(errors.New("pingresp not received, disconnecting")) // no harm in calling this if the connection is already down (or shutdown is in progress)
 				return
 			}
