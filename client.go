@@ -330,7 +330,7 @@ func (c *client) reconnect(connectionUp connCompletedFn) {
 
 	// If the reason of connection lost is same as the before one, sleep timer is set before attempting connection is started.
 	// Sleep time is exponentially increased as the same situation continues
-	if slp, isContinual := c.backoff.sleepWithBackoff("connectionLost", initSleep, c.options.MaxReconnectInterval, 3*time.Second, true); isContinual {
+	if slp, isContinual := c.backoff.sleepWithBackoff("connectionLost", initSleep, c.options.MaxReconnectInterval, c.options.ReconnectJitter, 3*time.Second, true); isContinual {
 		c.logger.Debug("Detect continual connection lost after reconnect, slept for", slog.Int("seconds", int(slp.Seconds())), slog.String("component", string(CLI)))
 	}
 
@@ -345,7 +345,7 @@ func (c *client) reconnect(connectionUp connCompletedFn) {
 			break
 		}
 		attemptCount++
-		sleep, _ := c.backoff.sleepWithBackoff("attemptReconnection", initSleep, c.options.MaxReconnectInterval, c.options.ConnectTimeout, false)
+		sleep, _ := c.backoff.sleepWithBackoff("attemptReconnection", initSleep, c.options.MaxReconnectInterval, c.options.ReconnectJitter, c.options.ConnectTimeout, false)
 		c.logger.Debug("Reconnect failed, slept for", slog.Int("seconds", int(sleep.Seconds())), slog.String("error", err.Error()), slog.String("component", string(CLI)))
 
 		if c.status.ConnectionStatus() != reconnecting { // Disconnect may have been called
