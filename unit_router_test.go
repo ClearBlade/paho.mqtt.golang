@@ -19,6 +19,7 @@
 package mqtt
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ import (
 )
 
 func Test_newRouter(t *testing.T) {
-	router := newRouter()
+	router := newRouter(noopSLogger)
 	if router == nil {
 		t.Fatalf("router is nil")
 	}
@@ -36,7 +37,7 @@ func Test_newRouter(t *testing.T) {
 }
 
 func Test_AddRoute(t *testing.T) {
-	router := newRouter()
+	router := newRouter(noopSLogger)
 	cb := func(client Client, msg Message) {
 	}
 	router.addRoute("/alpha", cb)
@@ -47,7 +48,7 @@ func Test_AddRoute(t *testing.T) {
 }
 
 func Test_AddRoute_Wildcards(t *testing.T) {
-	router := newRouter()
+	router := newRouter(noopSLogger)
 	cb := func(client Client, msg Message) {
 	}
 	router.addRoute("#", cb)
@@ -59,7 +60,7 @@ func Test_AddRoute_Wildcards(t *testing.T) {
 }
 
 func Test_DeleteRoute_Wildcards(t *testing.T) {
-	router := newRouter()
+	router := newRouter(noopSLogger)
 	cb := func(client Client, msg Message) {
 	}
 	router.addRoute("#", cb)
@@ -74,7 +75,7 @@ func Test_DeleteRoute_Wildcards(t *testing.T) {
 }
 
 func Test_Match(t *testing.T) {
-	router := newRouter()
+	router := newRouter(noopSLogger)
 	router.addRoute("/alpha", nil)
 
 	if !router.routes.Front().Value.(*route).match("/alpha") {
@@ -83,6 +84,45 @@ func Test_Match(t *testing.T) {
 
 	if router.routes.Front().Value.(*route).match("alpha") {
 		t.Fatalf("match function is bad")
+	}
+}
+
+func Test_matchWithWildcardTopicFilter(t *testing.T) {
+	cases := []struct {
+		name     string
+		filter   string
+		topic    string
+		expected bool
+	}{
+		// OK cases with wildcards
+		{"OK_WithPlus", "example/+/temp/+", "example/gauge/temp/25", true},
+		{"OK_WithPlus_$", "$sys/+/temp/+", "$sys/gauge/temp/25", true},
+		{"OK_WithSharp", "example/machines/#", "example/machines/robot-2/voltage", true},
+		{"OK_WithSharp_$", "$SYS/machines/#", "$SYS/machines/robot-2/voltage", true},
+
+		// OK cases with filter starting with wildcards
+		{"OK_OnlyPlus", "+", "sensor", true},
+		{"OK_StartWithPlus", "+/example", "sensor/example", true},
+		{"OK_OnlySharp", "#", "sensor/very/long/topic", true},
+		{"OK_SharedTopicWithPlus", "$share/group/+/example/+/data", "sensor/example/something/data", true},
+		{"OK_SharedTopicWithSharp", "$share/group/#", "sensor/this/is/shared", true},
+
+		// NG cases with filter starting with wildcards and topics starting with $
+		{"NG_OnlyPlus", "+", "$SYS", false},
+		{"NG_StartWithPlus", "+/example/sensor/+", "$VENDOR/example/sensor/data", false},
+		{"NG_OnlySharp", "#", "$sys/very/long/topic", false},
+		{"NG_SharedTopicWithSharp", "$share/group/#", "$vendor/this/is/shared", false},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			router := newRouter(noopSLogger)
+			router.addRoute(c.filter, nil)
+			result := router.routes.Front().Value.(*route).match(c.topic)
+			if result != c.expected {
+				t.Errorf("match function returned %v, expected %v for filter '%s' and topic '%s'", result, c.expected, c.filter, c.topic)
+			}
+		})
 	}
 }
 
@@ -295,7 +335,7 @@ func Test_MatchAndDispatch(t *testing.T) {
 
 	msgs := make(chan *packets.PublishPacket)
 
-	router := newRouter()
+	router := newRouter(noopSLogger)
 	router.addRoute("a", cb)
 
 	stopped := make(chan bool)
@@ -331,7 +371,7 @@ func Test_SharedSubscription_MatchAndDispatch(t *testing.T) {
 
 	msgs := make(chan *packets.PublishPacket)
 
-	router := newRouter()
+	router := newRouter(noopSLogger)
 	router.addRoute("$share/az1/a", cb)
 
 	stopped := make(chan bool)
@@ -353,4 +393,48 @@ func Test_SharedSubscription_MatchAndDispatch(t *testing.T) {
 		t.Errorf("matchAndDispatch should have exited")
 	}
 
+}
+
+func Benchmark_MatchAndDispatch(b *testing.B) {
+	calledback := make(chan bool, 1)
+
+	cb := func(c Client, m Message) {
+		calledback <- true
+	}
+
+	pub := packets.NewControlPacket(packets.Publish).(*packets.PublishPacket)
+	pub.TopicName = "a"
+	pub.Payload = []byte("foo")
+
+	msgs := make(chan *packets.PublishPacket, 1)
+
+	router := newRouter(noopSLogger)
+	router.addRoute("a", cb)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	stopped := make(chan bool)
+	go func() {
+		wg.Done() // started
+		<-router.matchAndDispatch(msgs, true, &client{oboundP: make(chan *PacketAndToken, 100)})
+		stopped <- true
+	}()
+
+	wg.Wait()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		msgs <- pub
+		<-calledback
+	}
+
+	close(msgs)
+
+	select {
+	case <-stopped:
+		break
+	case <-time.After(time.Second):
+		b.Errorf("matchAndDispatch should have exited")
+	}
 }
