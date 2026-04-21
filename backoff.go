@@ -18,6 +18,7 @@
 package mqtt
 
 import (
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -93,12 +94,22 @@ func (b *backoffController) getBackoffSleepTime(
 }
 
 // Execute sleep the time returned from getBackoffSleepTime.
+// When jitter > 0 and the sleep period has reached maxSleepPeriod, a random value in
+// (-jitter, +jitter) is added so that clients stagger their reconnect attempts.
 func (b *backoffController) sleepWithBackoff(
-	situation string, initSleepPeriod time.Duration, maxSleepPeriod time.Duration, processTime time.Duration, skipFirst bool,
+	situation string, initSleepPeriod time.Duration, maxSleepPeriod time.Duration, jitter time.Duration, processTime time.Duration, skipFirst bool,
 ) (time.Duration, bool) {
-	sleep, isFirst := b.getBackoffSleepTime(situation, initSleepPeriod, maxSleepPeriod, processTime, skipFirst)
+	sleep, isContinual := b.getBackoffSleepTime(situation, initSleepPeriod, maxSleepPeriod, processTime, skipFirst)
+	if sleep == maxSleepPeriod && jitter > 0 {
+		offset := time.Duration(rand.Int63n(int64(jitter)*2)) - jitter
+		if sleep+offset < 0 {
+			sleep = 0
+		} else {
+			sleep += offset
+		}
+	}
 	if sleep != 0 {
 		time.Sleep(sleep)
 	}
-	return sleep, isFirst
+	return sleep, isContinual
 }

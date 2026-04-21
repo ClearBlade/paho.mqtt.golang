@@ -92,6 +92,7 @@ type ClientOptions struct {
 	PingTimeout              time.Duration
 	ConnectTimeout           time.Duration // duration of 0 never times out
 	MaxReconnectInterval     time.Duration
+	ReconnectJitter          time.Duration
 	AutoReconnect            bool
 	ConnectRetryInterval     time.Duration
 	ConnectRetry             bool
@@ -396,6 +397,14 @@ func (o *ClientOptions) SetConnectTimeout(t time.Duration) *ClientOptions {
 // when connection is lost
 func (o *ClientOptions) SetMaxReconnectInterval(t time.Duration) *ClientOptions {
 	o.MaxReconnectInterval = t
+	return o
+}
+
+// SetReconnectJitter sets a jitter duration applied when the reconnect backoff reaches its
+// maximum interval. The actual sleep will be MaxReconnectInterval +/- a random value in
+// [0, ReconnectJitter), spreading reconnects across clients to avoid thundering-herd spikes.
+func (o *ClientOptions) SetReconnectJitter(d time.Duration) *ClientOptions {
+	o.ReconnectJitter = d
 	return o
 }
 

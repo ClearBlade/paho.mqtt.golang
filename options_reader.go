@@ -147,6 +147,10 @@ func (r *ClientOptionsReader) MaxReconnectInterval() time.Duration {
 	return s
 }
 
+func (r *ClientOptionsReader) ReconnectJitter() time.Duration {
+	return r.options.ReconnectJitter
+}
+
 func (r *ClientOptionsReader) AutoReconnect() bool {
 	s := r.options.AutoReconnect
 	return s
